@@ -26,6 +26,7 @@ private:
   std::vector<std::string> stack;
 
 public:
+  ParsingError() : description("") {}
   ParsingError(const std::string &description, const std::string &name)
       : description(description) {
     stack.push_back(name);
@@ -46,8 +47,7 @@ public:
       std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
   get(const std::string &desc, const std::string &name) {
     return std::make_optional(
-        std::variant<ParsingError,
-                                  std::unique_ptr<AbstractParserResult<S, T>>>(
+        std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
             ParsingError(desc, name)));
   }
   template <typename S, typename T>
@@ -55,8 +55,7 @@ public:
       std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
   get(ParsingError &e) {
     return std::make_optional(
-        std::variant<ParsingError,
-                                  std::unique_ptr<AbstractParserResult<S, T>>>(
+        std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
             ParsingError(e)));
   }
 };

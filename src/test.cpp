@@ -1,3 +1,4 @@
+#include "Alternate.hpp"
 #include "Predicate.hpp"
 #include "Sequence.hpp"
 #include <cassert>
@@ -119,9 +120,55 @@ void sequenceTest() {
   }
 }
 
+void alternateTest() {
+  auto a = Parser::StringPredicate("foo", "foo");
+  auto b = Parser::StringPredicate("foobar", "foobar");
+
+  auto list = std::make_unique<std::vector<
+      std::unique_ptr<Parser::AbstractParser<char, std::string>>>>();
+  list->push_back(std::move(a));
+  list->push_back(std::move(b));
+  auto parser = Parser::Alternate<char, std::string>(std::move(list), "parser");
+  {
+    std::cout << "Alternate 1" << std::endl;
+    for (char c : std::array{'f', 'o', 'o', 'b', 'a'}) {
+      auto v = parser(c);
+      assert(v.has_value() == false);
+    }
+    auto v = conv(parser('r'));
+    assert(v->get().value() == "foobar");
+    assert(v->get().has_value() == false);
+    assert(v->getRemaining().has_value() == false);
+  }
+  {
+    std::cout << "Alternate 2" << std::endl;
+    parser.reset();
+    for (char c : std::array{'f', 'o', 'o', 'b', 'a'}) {
+      auto v = parser(c);
+      assert(v.has_value() == false);
+    }
+    auto v = conv(parser('g'));
+    assert(v->get().value() == "foo");
+    assert(v->get().has_value() == false);
+    for (char c : std::array{'b', 'a', 'g'}) {
+      assert(v->getRemaining().value() == c);
+    }
+    assert(v->getRemaining().has_value() == false);
+  }
+  {
+    std::cout << "Alternate 3" << std::endl;
+    parser.reset();
+    auto v = parser('g');
+    assert(std::holds_alternative<Parser::ParsingError>(v.value()));
+    assert(std::get<Parser::ParsingError>(v.value()).toString() ==
+           "Insufficient tokens\n  at foobar\n  at parser (alt)");
+  }
+}
+
 int main() {
   trivialPredicateTest();
   stringPredicateTest();
   sequenceTest();
+  alternateTest();
   return 0;
 }
