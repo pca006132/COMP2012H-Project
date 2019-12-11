@@ -87,6 +87,13 @@ public:
       content.pop();
     i = 0;
   }
+  std::unique_ptr<AbstractParser<S, T>> clone() override {
+    auto v =
+        std::make_unique<std::vector<std::unique_ptr<AbstractParser<S, T>>>>();
+    for (auto &parser : *sequence)
+      v->push_back(std::move(parser->clone()));
+    return std::make_unique<Sequence<S, T>>(std::move(v), name);
+  }
   std::optional<
       std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
   operator()(const S &value) override {

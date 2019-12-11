@@ -13,8 +13,11 @@ private:
 
 public:
   StateResult(decltype(result) result) : result(std::move(result)) {}
+
   StateResult(const StateResult<S, T> &) = delete;
+
   void push(const S &value) { waitlist.push(value); }
+
   std::optional<S> getRemaining() override {
     if (auto s = result->getRemaining(); s.has_value())
       return s;
@@ -25,6 +28,7 @@ public:
     }
     return {};
   }
+
   std::optional<T> get() override { return result->get(); }
 };
 
@@ -50,6 +54,14 @@ public:
       p->reset();
       completed.push_back(false);
     }
+  }
+
+  std::unique_ptr<AbstractParser<S, T>> clone() override {
+    auto v =
+        std::make_unique<std::vector<std::unique_ptr<AbstractParser<S, T>>>>();
+    for (auto &parser : *options)
+      v->push_back(std::move(parser->clone()));
+    return std::make_unique<Alternate<S, T>>(std::move(v), name);
   }
 
   std::optional<
@@ -87,9 +99,7 @@ public:
     return {};
   }
 
-  const std::string &getName() override {
-    return name;
-  }
+  const std::string &getName() override { return name; }
 };
 
 } // namespace Parser

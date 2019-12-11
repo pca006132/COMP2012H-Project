@@ -140,14 +140,14 @@ void alternateTest() {
     assert(v->get().has_value() == false);
     assert(v->getRemaining().has_value() == false);
   }
+  auto parser2 = parser.clone();
   {
     std::cout << "Alternate 2" << std::endl;
-    parser.reset();
     for (char c : std::array{'f', 'o', 'o', 'b', 'a'}) {
-      auto v = parser(c);
+      auto v = (*parser2)(c);
       assert(v.has_value() == false);
     }
-    auto v = conv(parser('g'));
+    auto v = conv((*parser2)('g'));
     assert(v->get().value() == "foo");
     assert(v->get().has_value() == false);
     for (char c : std::array{'b', 'a', 'g'}) {

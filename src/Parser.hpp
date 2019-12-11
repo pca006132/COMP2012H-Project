@@ -27,6 +27,7 @@ private:
 
 public:
   ParsingError() : description("") {}
+
   ParsingError(const std::string &description, const std::string &name)
       : description(description) {
     stack.push_back(name);
@@ -50,6 +51,7 @@ public:
         std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
             ParsingError(desc, name)));
   }
+
   template <typename S, typename T>
   static std::optional<
       std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
@@ -63,11 +65,16 @@ public:
 template <typename S, typename T> class AbstractParser {
 public:
   virtual ~AbstractParser() = default;
+
   virtual void reset() = 0;
+
   virtual std::optional<
       std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
   operator()(const S &value) = 0;
+
   virtual const std::string &getName() = 0;
+
+  virtual std::unique_ptr<AbstractParser<S, T>> clone() = 0;
 };
 
 template <typename R, typename S, typename T, typename... _Args>

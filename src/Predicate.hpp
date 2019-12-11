@@ -35,10 +35,13 @@ private:
   public:
     PredicateParserResult(S token)
         : token(token), tokenLeft(true), valueLeft(false) {}
+
     PredicateParserResult(T value)
         : value(value), tokenLeft(false), valueLeft(true) {}
+
     PredicateParserResult(S token, T value)
         : token(token), value(value), tokenLeft(true), valueLeft(true) {}
+
     std::optional<S> getRemaining() override {
       if (tokenLeft) {
         tokenLeft = false;
@@ -46,6 +49,7 @@ private:
       }
       return {};
     }
+
     std::optional<T> get() override {
       if (valueLeft) {
         valueLeft = false;
@@ -60,13 +64,20 @@ public:
                   const std::string &name)
       : predicateGen(predicateGen), predicate(predicateGen()), q(quantifier),
         name(name) {}
+
   PredicateParser(const S s, const int quantifier, const std::string &name)
       : predicateGen([s]() { return [s](const S &v) { return v == s; }; }),
         predicate(predicateGen()), q(quantifier), name(name) {}
+
   void reset() override {
     count = 0;
     predicate = predicateGen();
   }
+
+  std::unique_ptr<AbstractParser<S, T>> clone() override {
+    return std::make_unique<PredicateParser>(predicateGen, q, name);
+  }
+
   std::optional<
       std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
   operator()(const S &value) override {
@@ -88,6 +99,7 @@ public:
       return castResult<PredicateParserResult, S, T>(value);
     return castResult<PredicateParserResult, S, T>(value, aggregated);
   }
+
   const std::string &getName() override { return name; }
 };
 
