@@ -20,6 +20,19 @@ public:
   virtual std::optional<S> getRemaining() = 0;
 };
 
+class ParsingError;
+template <typename S, typename T> class AbstractParser;
+
+template <typename S, typename T>
+using AbstractParserResultPtr = std::unique_ptr<AbstractParserResult<S, T>>;
+
+template <typename S, typename T>
+using AbstractParserPtr = std::unique_ptr<AbstractParser<S, T>>;
+
+template <typename S, typename T>
+using ParserResult = std::optional<
+    std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>;
+
 class ParsingError {
 private:
   std::string description;
@@ -44,18 +57,15 @@ public:
   }
 
   template <typename S, typename T>
-  static std::optional<
-      std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
-  get(const std::string &desc, const std::string &name) {
+  static ParserResult<S, T> get(const std::string &desc,
+                                const std::string &name) {
     return std::make_optional(
         std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
             ParsingError(desc, name)));
   }
 
   template <typename S, typename T>
-  static std::optional<
-      std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
-  get(ParsingError &e) {
+  static ParserResult<S, T> get(ParsingError &e) {
     return std::make_optional(
         std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
             ParsingError(e)));
@@ -68,20 +78,18 @@ public:
 
   virtual void reset() = 0;
 
-  virtual std::optional<
-      std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
-  operator()(const S &value) = 0;
+  virtual ParserResult<S, T> operator()(const S &value) = 0;
+
+  virtual ParserResult<S, T> operator()() = 0;
 
   virtual const std::string &getName() = 0;
 
-  virtual std::unique_ptr<AbstractParser<S, T>> clone() = 0;
+  virtual AbstractParserPtr<S, T> clone() = 0;
 };
 
 template <typename R, typename S, typename T, typename... _Args>
-inline std::optional<
-    std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
-castResult(_Args &&... args) {
-  std::unique_ptr<AbstractParserResult<S, T>> p =
+inline ParserResult<S, T> castResult(_Args &&... args) {
+  AbstractParserResultPtr<S, T> p =
       std::make_unique<R>(std::forward<_Args>(args)...);
   return std::make_optional(
       std::variant<ParsingError, decltype(p)>(std::move(p)));

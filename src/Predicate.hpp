@@ -33,6 +33,8 @@ private:
     bool valueLeft;
 
   public:
+    PredicateParserResult() : tokenLeft(false), valueLeft(false) {}
+
     PredicateParserResult(S token)
         : token(token), tokenLeft(true), valueLeft(false) {}
 
@@ -74,13 +76,11 @@ public:
     predicate = predicateGen();
   }
 
-  std::unique_ptr<AbstractParser<S, T>> clone() override {
+  AbstractParserPtr<S, T> clone() override {
     return std::make_unique<PredicateParser>(predicateGen, q, name);
   }
 
-  std::optional<
-      std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
-  operator()(const S &value) override {
+  ParserResult<S, T> operator()(const S &value) override {
     if (predicate(value)) {
       T v = convert(value);
       if (count++ == 0)
@@ -98,6 +98,14 @@ public:
     if (count == 0)
       return castResult<PredicateParserResult, S, T>(value);
     return castResult<PredicateParserResult, S, T>(value, aggregated);
+  }
+
+  ParserResult<S, T> operator()() override {
+    if (count < q || (count == 0 && (q == ONCE || q == MORE)))
+      return ParsingError::get<S, T>("Insufficient tokens", name);
+    if (count == 0)
+      return castResult<PredicateParserResult, S, T>();
+    return castResult<PredicateParserResult, S, T>(aggregated);
   }
 
   const std::string &getName() override { return name; }

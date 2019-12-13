@@ -9,9 +9,8 @@ namespace Parser {
 template <typename S, typename T>
 class AggregatedParserResult final : public AbstractParserResult<S, T> {
 private:
-  std::unique_ptr<std::stack<std::unique_ptr<AbstractParserResult<S, T>>>>
-      prevResults;
-  std::unique_ptr<AbstractParserResult<S, T>> result;
+  std::unique_ptr<std::stack<AbstractParserResultPtr<S, T>>> prevResults;
+  AbstractParserResultPtr<S, T> result;
   std::queue<T> prev;
 
 public:
@@ -60,26 +59,23 @@ public:
 
 template <typename S, typename T> class Sequence : public AbstractParser<S, T> {
 private:
-  std::unique_ptr<std::vector<std::unique_ptr<AbstractParser<S, T>>>> sequence;
-  std::unique_ptr<std::stack<std::unique_ptr<AbstractParserResult<S, T>>>>
-      prevResults;
+  std::unique_ptr<std::vector<AbstractParserPtr<S, T>>> sequence;
+  std::unique_ptr<std::stack<AbstractParserResultPtr<S, T>>> prevResults;
   std::queue<T> content;
   QueueParserResult<S, T> *input;
   std::string name;
   unsigned int i = 0;
 
 public:
-  Sequence(std::unique_ptr<std::vector<std::unique_ptr<AbstractParser<S, T>>>>
-               sequence,
-           const std::string &name)
+  Sequence(decltype(sequence) sequence, const std::string &name)
       : sequence(std::move(sequence)), name(name) {
     reset();
   }
+
   void reset() override {
     for (auto &parser : *sequence)
       parser->reset();
-    prevResults = std::make_unique<
-        std::stack<std::unique_ptr<AbstractParserResult<S, T>>>>();
+    prevResults = std::make_unique<std::stack<AbstractParserResultPtr<S, T>>>();
     auto storage = std::make_unique<QueueParserResult<S, T>>();
     input = storage.get();
     prevResults->push(std::move(storage));
@@ -87,16 +83,15 @@ public:
       content.pop();
     i = 0;
   }
-  std::unique_ptr<AbstractParser<S, T>> clone() override {
-    auto v =
-        std::make_unique<std::vector<std::unique_ptr<AbstractParser<S, T>>>>();
+
+  AbstractParserPtr<S, T> clone() override {
+    auto v = std::make_unique<std::vector<AbstractParserPtr<S, T>>>();
     for (auto &parser : *sequence)
       v->push_back(std::move(parser->clone()));
     return std::make_unique<Sequence<S, T>>(std::move(v), name);
   }
-  std::optional<
-      std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>
-  operator()(const S &value) override {
+
+  ParserResult<S, T> operator()(const S &value) override {
     if (i == sequence->size())
       throw std::out_of_range("The sequence is already finished");
     input->push(value);
@@ -121,8 +116,7 @@ public:
         e.record(name);
         return ParsingError::get<S, T>(e);
       }
-      auto &result =
-          std::get<std::unique_ptr<AbstractParserResult<S, T>>>(opt.value());
+      auto &result = std::get<AbstractParserResultPtr<S, T>>(opt.value());
       if (++i == sequence->size()) {
         return castResult<AggregatedParserResult<S, T>, S, T>(
             std::move(prevResults), std::move(result), content);
@@ -133,6 +127,43 @@ public:
       prevResults->push(std::move(result));
     }
   }
+
+  ParserResult<S, T> operator()() override {
+    while (true) {
+      S v;
+      bool hasValue;
+      while (true) {
+        if (auto t = prevResults->top()->getRemaining(); t.has_value()) {
+          v = t.value();
+          hasValue = true;
+          break;
+        }
+        if (prevResults->size() == 1) {
+          hasValue = false;
+          break;
+        }
+        prevResults->pop();
+      }
+      auto opt = hasValue ? (*sequence->at(i))(v) : (*sequence->at(i))();
+      if (!opt.has_value())
+        return ParsingError::get<S, T>("Insufficient Tokens", name);
+      if (std::holds_alternative<ParsingError>(opt.value())) {
+        auto e = std::get<ParsingError>(opt.value());
+        e.record(name);
+        return ParsingError::get<S, T>(e);
+      }
+      auto &result = std::get<AbstractParserResultPtr<S, T>>(opt.value());
+      if (++i == sequence->size()) {
+        return castResult<AggregatedParserResult<S, T>, S, T>(
+            std::move(prevResults), std::move(result), content);
+      }
+      for (auto t = result->get(); t.has_value(); t = result->get()) {
+        content.push(t.value());
+      }
+      prevResults->push(std::move(result));
+    }
+  }
+
   const std::string &getName() override { return name; }
 };
 
