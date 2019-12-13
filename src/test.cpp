@@ -38,13 +38,23 @@ void trivialPredicateTest() {
   }
   {
     std::cout << "Predicate 3" << std::endl;
+    a.reset();
+    for (int i = 0; i < 4; ++i) {
+      assert(a('a').has_value() == false);
+    }
+    auto v = conv(a());
+    assert(v->get().value() == "aaaa");
+    assert(v->getRemaining().has_value() == false);
+  }
+  {
+    std::cout << "Predicate 4" << std::endl;
     b.reset();
     auto v = conv(b('b'));
     assert(v->getRemaining().value() == 'b');
     assert(v->getRemaining().has_value() == false);
   }
   {
-    std::cout << "Predicate 4" << std::endl;
+    std::cout << "Predicate 5" << std::endl;
     a.reset();
     assert(std::holds_alternative<Parser::ParsingError>(a('b').value()));
   }
@@ -109,10 +119,21 @@ void sequenceTest() {
   {
     std::cout << "Sequence 3" << std::endl;
     parser.reset();
-    assert(std::holds_alternative<Parser::ParsingError>(parser('c').value()));
+    for (char c : std::array{'b', 'b', 'b'}) {
+      assert(parser(c).has_value() == false);
+    }
+    auto value = conv(parser());
+    assert(value->get().value() == "bbb");
+    assert(value->get().has_value() == false);
+    assert(value->getRemaining().has_value() == false);
   }
   {
     std::cout << "Sequence 4" << std::endl;
+    parser.reset();
+    assert(std::holds_alternative<Parser::ParsingError>(parser('c').value()));
+  }
+  {
+    std::cout << "Sequence 5" << std::endl;
     parser.reset();
     parser('b');
     auto e = std::get<Parser::ParsingError>(parser('a').value());
