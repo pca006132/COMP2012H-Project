@@ -1,4 +1,5 @@
 #include "Alternate.hpp"
+#include "Lazy.hpp"
 #include "Predicate.hpp"
 #include "Sequence.hpp"
 #include "TakeTill.hpp"
@@ -14,6 +15,12 @@ auto conv(std::optional<std::variant<
   return std::get<
       std::unique_ptr<Parser::AbstractParserResult<char, std::string>>>(
       std::move(v.value()));
+}
+
+Parser::AbstractParserPtr<char, std::string>
+operator"" _c(const char *str, const std::size_t size) {
+  std::string st(str, size);
+  return Parser::StringPredicate(st, st);
 }
 
 void trivialPredicateTest() {
@@ -195,9 +202,9 @@ void takeTillTest() {
   Parser::AbstractParserPtr<char, std::string> pattern =
       std::make_unique<CharPredicate>('a', 2, "aa");
   auto parser = Parser::TakeTill<char, std::string, std::string>(
-      std::move(pattern->clone()), std::move(ending), "parser");
+      pattern->clone(), std::move(ending), "parser");
   auto parser2 = Parser::TakeTill<char, std::string, std::string>(
-      std::move(pattern->clone()), std::move(ending2), "parser2");
+      pattern->clone(), std::move(ending2), "parser2");
   {
     std::cout << "TakeTill 1" << std::endl;
     for (char c : std::array{'a', 'a', 'a', 'a', 'a', 'a'}) {
@@ -222,11 +229,42 @@ void takeTillTest() {
   }
 }
 
+void lazyTest() {
+  auto alternatives = std::make_unique<
+      std::vector<Parser::AbstractParserPtr<char, std::string>>>();
+  auto options =
+      Parser::Alternate<char, std::string>(std::move(alternatives), "options");
+  Parser::AbstractParserPtr<char, std::string> recursive =
+      std::make_unique<Parser::LazyParser<char, std::string>>(&options);
+
+  Parser::AbstractParserPtr<char, std::string> seq =
+      Parser::Sequence<char, std::string>::get(
+          "SEQ", std::array{"("_c, std::move(recursive), ")"_c});
+  options.getOptions()->push_back(std::move(seq));
+  options.getOptions()->push_back(CharPredicate::get('a', Parser::MORE, "a"));
+  options.reset();
+
+  {
+    for (char c : "((aaa)") {
+      if (c == '\0')
+        break;
+      auto v = options(c);
+      assert(v.has_value() == false);
+    }
+    auto v = conv(options(')'));
+    for (auto s : std::array{"(", "(", "aaa", ")", ")"})
+      assert(v->get().value() == s);
+    assert(v->get().has_value() == false);
+    assert(v->getRemaining().has_value() == false);
+  }
+}
+
 int main() {
   trivialPredicateTest();
   stringPredicateTest();
   sequenceTest();
   alternateTest();
   takeTillTest();
+  lazyTest();
   return 0;
 }

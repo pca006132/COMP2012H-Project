@@ -65,7 +65,4 @@
         "-std=c++17"
     ],
     "editor.foldingStrategy": "indentation",
-    "[cpp]": {
-        "editor.defaultFormatter": "ms-vscode.cpptools"
-    },
 }

@@ -1,61 +1,9 @@
 #pragma once
+#include "HelperResults.hpp"
 #include "Parser.hpp"
 #include <functional>
-#include <queue>
-#include <stack>
 
 namespace Parser {
-
-template <typename S, typename T>
-class AggregatedParserResult final : public AbstractParserResult<S, T> {
-private:
-  std::unique_ptr<std::stack<AbstractParserResultPtr<S, T>>> prevResults;
-  AbstractParserResultPtr<S, T> result;
-  std::queue<T> prev;
-
-public:
-  AggregatedParserResult(decltype(prevResults) prevResults,
-                         decltype(result) result, decltype(prev) prev)
-      : prevResults(std::move(prevResults)), result(std::move(result)),
-        prev(prev) {}
-  AggregatedParserResult(const AggregatedParserResult<S, T> &) = delete;
-  std::optional<S> getRemaining() override {
-    if (auto v = result->getRemaining(); v.has_value())
-      return v;
-    while (!prevResults->empty()) {
-      if (auto v = prevResults->top()->getRemaining(); v.has_value())
-        return v;
-      prevResults->pop();
-    }
-    return {};
-  }
-  std::optional<T> get() override {
-    if (!prev.empty()) {
-      T top = prev.front();
-      prev.pop();
-      return std::make_optional(top);
-    }
-    return result->get();
-  }
-};
-
-template <typename S, typename T>
-class QueueParserResult final : public AbstractParserResult<S, T> {
-private:
-  std::queue<S> inputs;
-
-public:
-  void push(const S &value) { inputs.push(value); }
-  std::optional<S> getRemaining() override {
-    if (!inputs.empty()) {
-      S value = inputs.front();
-      inputs.pop();
-      return std::make_optional(value);
-    }
-    return {};
-  }
-  std::optional<T> get() override { return {}; }
-};
 
 template <typename S, typename T> class Sequence : public AbstractParser<S, T> {
 private:
@@ -92,8 +40,6 @@ public:
   }
 
   ParserResult<S, T> operator()(const S &value) override {
-    if (i == sequence->size())
-      throw std::out_of_range("The sequence is already finished");
     input->push(value);
     while (true) {
       S v;
@@ -114,12 +60,15 @@ public:
       if (isError(opt)) {
         auto e = asError(opt);
         e.record(name);
+        reset();
         return ParsingError::get<S, T>(e);
       }
       auto &result = asResult(opt);
       if (++i == sequence->size()) {
-        return castResult<AggregatedParserResult<S, T>, S, T>(
+        auto parsed = castResult<AggregatedParserResult<S, T>, S, T>(
             std::move(prevResults), std::move(result), content);
+        reset();
+        return parsed;
       }
       for (auto t = result->get(); t.has_value(); t = result->get()) {
         content.push(t.value());
@@ -145,17 +94,22 @@ public:
         prevResults->pop();
       }
       auto opt = hasValue ? (*sequence->at(i))(v) : (*sequence->at(i))();
-      if (!opt.has_value())
+      if (!opt.has_value()) {
+        reset();
         return ParsingError::get<S, T>("Insufficient Tokens", name);
+      }
       if (isError(opt)) {
         auto e = asError(opt);
         e.record(name);
+        reset();
         return ParsingError::get<S, T>(e);
       }
       auto &result = asResult(opt);
       if (++i == sequence->size()) {
-        return castResult<AggregatedParserResult<S, T>, S, T>(
+        auto parsed = castResult<AggregatedParserResult<S, T>, S, T>(
             std::move(prevResults), std::move(result), content);
+        reset();
+        return parsed;
       }
       for (auto t = result->get(); t.has_value(); t = result->get()) {
         content.push(t.value());
@@ -165,6 +119,16 @@ public:
   }
 
   const std::string &getName() override { return name; }
+
+  auto &getSequence() { return sequence; }
+
+  template <typename array>
+  static auto get(const std::string &name, array &&args) {
+    auto list = std::make_unique<std::vector<AbstractParserPtr<S, T>>>();
+    for (auto &i : args)
+      list->push_back(std::move(i));
+    return std::make_unique<Sequence<S, T>>(std::move(list), name);
+  }
 };
 
 } // namespace Parser

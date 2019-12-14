@@ -89,26 +89,43 @@ public:
         aggregated = fold(aggregated, v);
       if (q == NONE)
         return ParsingError::get<S, T>("Unexpected " + toStr(v), name);
-      if (q == ONCE || q == OPTIONAL || q == count)
-        return castResult<PredicateParserResult, S, T>(aggregated);
+      if (q == ONCE || q == OPTIONAL || q == count) {
+        auto parsed = castResult<PredicateParserResult, S, T>(aggregated);
+        reset();
+        return parsed;
+      }
       return {};
     }
-    if (count < q || (count == 0 && (q == ONCE || q == MORE)))
+    if (count < q || (count == 0 && (q == ONCE || q == MORE))) {
+      reset();
       return ParsingError::get<S, T>("Insufficient tokens", name);
-    if (count == 0)
-      return castResult<PredicateParserResult, S, T>(value);
-    return castResult<PredicateParserResult, S, T>(value, aggregated);
+    }
+    auto result =
+        count == 0 ? castResult<PredicateParserResult, S, T>(value)
+                   : castResult<PredicateParserResult, S, T>(value, aggregated);
+    reset();
+    return result;
   }
 
   ParserResult<S, T> operator()() override {
-    if (count < q || (count == 0 && (q == ONCE || q == MORE)))
+    if (count < q || (count == 0 && (q == ONCE || q == MORE))) {
+      reset();
       return ParsingError::get<S, T>("Insufficient tokens", name);
-    if (count == 0)
-      return castResult<PredicateParserResult, S, T>();
-    return castResult<PredicateParserResult, S, T>(aggregated);
+    }
+    auto result = count == 0
+                      ? castResult<PredicateParserResult, S, T>()
+                      : castResult<PredicateParserResult, S, T>(aggregated);
+    reset();
+    return result;
   }
 
   const std::string &getName() override { return name; }
+
+  static AbstractParserPtr<S, T> get(const S &s, const int quantifier,
+                                     const std::string &name) {
+    return std::make_unique<PredicateParser<S, T, convert, fold, toStr>>(
+        s, quantifier, name);
+  }
 };
 
 auto StringPredicate(const std::string &str, const std::string &name) {
@@ -121,6 +138,5 @@ auto StringPredicate(const std::string &str, const std::string &name) {
   return std::make_unique<
       PredicateParser<char, std::string, Utils::fromChar, Utils::fold>>(
       fn, str.length(), name);
-}
-
+};
 } // namespace Parser

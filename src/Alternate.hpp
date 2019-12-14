@@ -6,38 +6,36 @@
 namespace Parser {
 
 template <typename S, typename T>
-class StateResult : public AbstractParserResult<S, T> {
-private:
-  std::queue<S> waitlist;
-  AbstractParserResultPtr<S, T> result;
-
-public:
-  StateResult(decltype(result) result) : result(std::move(result)) {}
-
-  StateResult(const StateResult<S, T> &) = delete;
-
-  void push(const S &value) { waitlist.push(value); }
-
-  std::optional<S> getRemaining() override {
-    if (auto s = result->getRemaining(); s.has_value())
-      return s;
-    if (!waitlist.empty()) {
-      S s = waitlist.front();
-      waitlist.pop();
-      return s;
-    }
-    return {};
-  }
-
-  std::optional<T> get() override { return result->get(); }
-};
-
-template <typename S, typename T>
 class Alternate : public AbstractParser<S, T> {
 private:
+  class StateResult : public AbstractParserResult<S, T> {
+  private:
+    std::queue<S> waitlist;
+    AbstractParserResultPtr<S, T> result;
+
+  public:
+    StateResult(decltype(result) result) : result(std::move(result)) {}
+
+    StateResult(const StateResult &) = delete;
+
+    void push(const S &value) { waitlist.push(value); }
+
+    std::optional<S> getRemaining() override {
+      if (auto s = result->getRemaining(); s.has_value())
+        return s;
+      if (!waitlist.empty()) {
+        S s = waitlist.front();
+        waitlist.pop();
+        return s;
+      }
+      return {};
+    }
+
+    std::optional<T> get() override { return result->get(); }
+  };
   std::unique_ptr<std::vector<AbstractParserPtr<S, T>>> options;
   std::vector<bool> completed;
-  std::unique_ptr<StateResult<S, T>> result;
+  std::unique_ptr<StateResult> result;
   ParsingError error;
   std::string name;
 
@@ -48,7 +46,7 @@ public:
   }
 
   void reset() override {
-    result = std::unique_ptr<StateResult<S, T>>(nullptr);
+    result = std::unique_ptr<StateResult>(nullptr);
     completed.clear();
     for (auto &p : *options) {
       p->reset();
@@ -76,7 +74,7 @@ public:
             error = asError(r);
           } else {
             auto &v = asResult(r);
-            result = std::make_unique<StateResult<S, T>>(std::move(v));
+            result = std::make_unique<StateResult>(std::move(v));
           }
         } else {
           allCompleted = false;
@@ -86,10 +84,13 @@ public:
     if (allCompleted) {
       if (result != nullptr) {
         AbstractParserResultPtr<S, T> p = std::move(result);
-        return std::make_optional(
+        auto parsed = std::make_optional(
             std::variant<ParsingError, decltype(p)>(std::move(p)));
+        reset();
+        return parsed;
       }
       error.record(name + " (alt)");
+      reset();
       return ParsingError::get<S, T>(error);
     }
     return {};
@@ -106,7 +107,7 @@ public:
             error = asError(r);
           } else {
             auto &v = asResult(r);
-            result = std::make_unique<StateResult<S, T>>(std::move(v));
+            result = std::make_unique<StateResult>(std::move(v));
           }
         } else {
           allCompleted = false;
@@ -116,16 +117,30 @@ public:
     if (allCompleted) {
       if (result != nullptr) {
         AbstractParserResultPtr<S, T> p = std::move(result);
-        return std::make_optional(
+        auto parsed = std::make_optional(
             std::variant<ParsingError, decltype(p)>(std::move(p)));
+        reset();
+        return parsed;
       }
       error.record(name + " (alt)");
+      reset();
       return ParsingError::get<S, T>(error);
     }
+    reset();
     return ParsingError::get<S, T>("Insufficient Tokens", name);
   }
 
   const std::string &getName() override { return name; }
+
+  auto &getOptions() { return options; }
+
+  template <typename array>
+  static auto get(const std::string &name, array &&args) {
+    auto list = std::make_unique<std::vector<AbstractParserPtr<S, T>>>();
+    for (auto &i : args)
+      list->push_back(std::move(i));
+    return std::make_unique<Alternate<S, T>>(std::move(list), name);
+  }
 };
 
 } // namespace Parser
