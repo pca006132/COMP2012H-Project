@@ -72,6 +72,21 @@ public:
   }
 };
 
+template <typename S, typename T>
+bool isError(const ParserResult<S, T> &result) {
+  return std::holds_alternative<ParsingError>(result.value());
+}
+
+template <typename S, typename T>
+AbstractParserResultPtr<S, T> &asResult(ParserResult<S, T> &result) {
+  return std::get<AbstractParserResultPtr<S, T>>(result.value());
+}
+
+template <typename S, typename T>
+ParsingError &asError(ParserResult<S, T> &result) {
+  return std::get<ParsingError>(result.value());
+}
+
 template <typename S, typename T> class AbstractParser {
 public:
   virtual ~AbstractParser() = default;

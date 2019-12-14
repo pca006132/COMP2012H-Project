@@ -1,6 +1,7 @@
 #include "Alternate.hpp"
 #include "Predicate.hpp"
 #include "Sequence.hpp"
+#include "TakeTill.hpp"
 #include <cassert>
 #include <iostream>
 
@@ -186,10 +187,46 @@ void alternateTest() {
   }
 }
 
+void takeTillTest() {
+  Parser::AbstractParserPtr<char, std::string> ending =
+      Parser::StringPredicate("aa/", "end");
+  Parser::AbstractParserPtr<char, std::string> ending2 =
+      std::make_unique<CharPredicate>('a', Parser::MORE, "end 2");
+  Parser::AbstractParserPtr<char, std::string> pattern =
+      std::make_unique<CharPredicate>('a', 2, "aa");
+  auto parser = Parser::TakeTill<char, std::string, std::string>(
+      std::move(pattern->clone()), std::move(ending), "parser");
+  auto parser2 = Parser::TakeTill<char, std::string, std::string>(
+      std::move(pattern->clone()), std::move(ending2), "parser2");
+  {
+    std::cout << "TakeTill 1" << std::endl;
+    for (char c : std::array{'a', 'a', 'a', 'a', 'a', 'a'}) {
+      auto result = parser(c);
+      assert(result.has_value() == false);
+    }
+    auto result = conv(parser('/'));
+    assert(result->getRemaining().has_value() == false);
+    assert(result->get().value() == "aa");
+    assert(result->get().value() == "aa");
+    assert(result->get().has_value() == false);
+  }
+  {
+    std::cout << "TakeTill 2" << std::endl;
+    for (char c : std::array{'a', 'a', 'a', 'a', 'a', 'a'}) {
+      auto result = parser2(c);
+      assert(result.has_value() == false);
+    }
+    auto result = conv(parser2());
+    assert(result->getRemaining().has_value() == false);
+    assert(result->get().has_value() == false);
+  }
+}
+
 int main() {
   trivialPredicateTest();
   stringPredicateTest();
   sequenceTest();
   alternateTest();
+  takeTillTest();
   return 0;
 }

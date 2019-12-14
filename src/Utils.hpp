@@ -2,6 +2,8 @@
 #include <string>
 
 namespace Utils {
-std::string fromChar(const char &c);
-std::string fold(const std::string &a, const std::string &b);
+inline std::string fromChar(const char &c) { return std::string(1, c); }
+inline std::string fold(const std::string &a, const std::string &b) {
+  return a + b;
+}
 } // namespace Utils

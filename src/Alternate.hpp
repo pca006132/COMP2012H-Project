@@ -72,10 +72,10 @@ public:
         auto r = (*options->at(i))(value);
         if (r.has_value()) {
           completed[i] = true;
-          if (std::holds_alternative<ParsingError>(r.value())) {
-            error = std::get<ParsingError>(r.value());
+          if (isError(r)) {
+            error = asError(r);
           } else {
-            auto &v = std::get<AbstractParserResultPtr<S, T>>(r.value());
+            auto &v = asResult(r);
             result = std::make_unique<StateResult<S, T>>(std::move(v));
           }
         } else {
@@ -95,19 +95,17 @@ public:
     return {};
   }
 
-  ParserResult<S, T>
-  operator()() override {
+  ParserResult<S, T> operator()() override {
     bool allCompleted = true;
     for (unsigned int i = 0; i < completed.size(); ++i) {
       if (!completed[i]) {
         auto r = (*options->at(i))();
         if (r.has_value()) {
           completed[i] = true;
-          if (std::holds_alternative<ParsingError>(r.value())) {
-            error = std::get<ParsingError>(r.value());
+          if (isError(r)) {
+            error = asError(r);
           } else {
-            auto &v = std::get<AbstractParserResultPtr<S, T>>(
-                r.value());
+            auto &v = asResult(r);
             result = std::make_unique<StateResult<S, T>>(std::move(v));
           }
         } else {

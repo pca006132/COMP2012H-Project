@@ -111,12 +111,12 @@ public:
       auto opt = (*sequence->at(i))(v);
       if (!opt.has_value())
         continue;
-      if (std::holds_alternative<ParsingError>(opt.value())) {
-        auto e = std::get<ParsingError>(opt.value());
+      if (isError(opt)) {
+        auto e = asError(opt);
         e.record(name);
         return ParsingError::get<S, T>(e);
       }
-      auto &result = std::get<AbstractParserResultPtr<S, T>>(opt.value());
+      auto &result = asResult(opt);
       if (++i == sequence->size()) {
         return castResult<AggregatedParserResult<S, T>, S, T>(
             std::move(prevResults), std::move(result), content);
@@ -147,12 +147,12 @@ public:
       auto opt = hasValue ? (*sequence->at(i))(v) : (*sequence->at(i))();
       if (!opt.has_value())
         return ParsingError::get<S, T>("Insufficient Tokens", name);
-      if (std::holds_alternative<ParsingError>(opt.value())) {
-        auto e = std::get<ParsingError>(opt.value());
+      if (isError(opt)) {
+        auto e = asError(opt);
         e.record(name);
         return ParsingError::get<S, T>(e);
       }
-      auto &result = std::get<AbstractParserResultPtr<S, T>>(opt.value());
+      auto &result = asResult(opt);
       if (++i == sequence->size()) {
         return castResult<AggregatedParserResult<S, T>, S, T>(
             std::move(prevResults), std::move(result), content);
