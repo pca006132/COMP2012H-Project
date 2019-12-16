@@ -6,6 +6,8 @@ The git repo can be found at [https://github.com/pca006132/COMP2012H-Project](ht
 
 We used c++17 for the variant and optional type, template parameter deduction and some other features to simplify our code. This is possible in older version but it would be more readable and simple using c++17 constructs.
 
+Compile: make. Dependency: clang++, but other compilers can be used with minor changes to the build script.
+
 ## Design
 > Notations: `A | B` is used to indicate `std::variant<A, B>`, `A?` indicates `std::optional<A>`. Smart pointer types are omitted.
 
