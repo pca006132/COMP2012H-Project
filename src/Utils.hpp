@@ -1,9 +1,13 @@
 #pragma once
 #include <string>
+using std::string;
 
+//functions to manipulate std::string
 namespace Utils {
-inline std::string fromChar(const char &c) { return std::string(1, c); }
-inline std::string fold(const std::string &a, const std::string &b) {
-  return a + b;
-}
+  string fromChar(const char &c) { return string(1, c); }
+
+  string fold(const string &a, const string &b) {
+    return a + b;
+  }
+
 } // namespace Utils
