@@ -6,8 +6,11 @@
 #include <cassert>
 #include <iostream>
 
-typedef Parser::PredicateParser<char, std::string, Utils::fromChar, Utils::fold>
-    CharPredicate;
+// some tests for the parsers.
+// some functions for convenience
+
+using CharPredicate =
+    Parser::PredicateParser<char, std::string, Utils::fromChar, Utils::fold>;
 auto conv(std::optional<std::variant<
               Parser::ParsingError,
               std::unique_ptr<Parser::AbstractParserResult<char, std::string>>>>
@@ -17,7 +20,7 @@ auto conv(std::optional<std::variant<
       std::move(v.value()));
 }
 
-Parser::AbstractParserPtr<char, std::string>
+static Parser::AbstractParserPtr<char, std::string>
 operator"" _c(const char *str, const std::size_t size) {
   std::string st(str, size);
   return Parser::StringPredicate(st, st);
@@ -230,6 +233,10 @@ void takeTillTest() {
 }
 
 void lazyTest() {
+  // This is just to demonstrate that recursive parser is possible through the
+  // lazy construct.
+  // This would not be possible if we don't use lazy construct as it would need
+  // infinite many sub-parsers for recursive parser.
   auto alternatives = std::make_unique<
       std::vector<Parser::AbstractParserPtr<char, std::string>>>();
   auto options =

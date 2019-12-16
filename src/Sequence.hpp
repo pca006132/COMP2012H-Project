@@ -5,6 +5,9 @@
 
 namespace Parser {
 
+/**
+ * A combinator for concatenation of parsers. Note that the parsers are greedy.
+ */
 template <typename S, typename T> class Sequence : public AbstractParser<S, T> {
 private:
   std::unique_ptr<std::vector<AbstractParserPtr<S, T>>> sequence;
@@ -40,6 +43,9 @@ public:
   }
 
   ParserResult<S, T> operator()(const S &value) override {
+    // Actually the principle is very simple, we deal with a stack of a token
+    // list, rather than the input directly. Previous tokens may expand the
+    // token list. Check HelperResult for the reason of this.
     input->push(value);
     while (true) {
       S v;
@@ -78,6 +84,10 @@ public:
   }
 
   ParserResult<S, T> operator()() override {
+    // Similar to the last one, the only different is that we would return an
+    // error if the current parser has no output. Even if we are provided with
+    // no input token, we may still have some because of the tokens from
+    // previous parsers.
     while (true) {
       S v;
       bool hasValue;

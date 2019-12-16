@@ -13,6 +13,12 @@ constexpr int ONCE = 1;
 
 template <typename T> T identity(const T &v) { return v; }
 
+/**
+ * This is just a simple predicate class. The convert function takes the input
+ * of type S and convert it to output type T. The fold function (actually foldl)
+ * aggregate the input (T->T->T), and the toStr function give us a
+ * human-readable error message (though I found that I did not use it much).
+ */
 template <typename S, typename T, T convert(const S &),
           T fold(const T &, const T &),
           std::string toStr(const T &) = identity<T>>
@@ -20,7 +26,7 @@ class PredicateParser final : public AbstractParser<S, T> {
 private:
   std::function<std::function<bool(const S &)>()> predicateGen;
   std::function<bool(const S &)> predicate;
-  int q;
+  int quantifier;
   int count = 0;
   T aggregated;
   std::string name;
@@ -64,39 +70,43 @@ private:
 public:
   PredicateParser(decltype(predicateGen) predicateGen, const int quantifier,
                   const std::string &name)
-      : predicateGen(predicateGen), predicate(predicateGen()), q(quantifier),
-        name(name) {}
+      : predicateGen(predicateGen), predicate(predicateGen()),
+        quantifier(quantifier), name(name) {}
 
   PredicateParser(const S s, const int quantifier, const std::string &name)
       : predicateGen([s]() { return [s](const S &v) { return v == s; }; }),
-        predicate(predicateGen()), q(quantifier), name(name) {}
+        predicate(predicateGen()), quantifier(quantifier), name(name) {}
 
   void reset() override {
     count = 0;
+    // The predicate function is stateful. We need to generate a new one when we
+    // reset the parser.
     predicate = predicateGen();
   }
 
   AbstractParserPtr<S, T> clone() override {
-    return std::make_unique<PredicateParser>(predicateGen, q, name);
+    return std::make_unique<PredicateParser>(predicateGen, quantifier, name);
   }
 
   ParserResult<S, T> operator()(const S &value) override {
+    // Simple logic: Handle the special quantifiers specifically in each case.
     if (predicate(value)) {
       T v = convert(value);
       if (count++ == 0)
         aggregated = v;
       else
         aggregated = fold(aggregated, v);
-      if (q == NONE)
+      if (quantifier == NONE)
         return ParsingError::get<S, T>("Unexpected " + toStr(v), name);
-      if (q == ONCE || q == OPTIONAL || q == count) {
+      if (quantifier == ONCE || quantifier == OPTIONAL || quantifier == count) {
         auto parsed = castResult<PredicateParserResult, S, T>(aggregated);
         reset();
         return parsed;
       }
       return {};
     }
-    if (count < q || (count == 0 && (q == ONCE || q == MORE))) {
+    if (count < quantifier ||
+        (count == 0 && (quantifier == ONCE || quantifier == MORE))) {
       reset();
       return ParsingError::get<S, T>("Insufficient tokens", name);
     }
@@ -108,7 +118,8 @@ public:
   }
 
   ParserResult<S, T> operator()() override {
-    if (count < q || (count == 0 && (q == ONCE || q == MORE))) {
+    if (count < quantifier ||
+        (count == 0 && (quantifier == ONCE || quantifier == MORE))) {
       reset();
       return ParsingError::get<S, T>("Insufficient tokens", name);
     }
@@ -128,15 +139,7 @@ public:
   }
 };
 
-auto StringPredicate(const std::string &str, const std::string &name) {
-  auto fn = [str]() {
-    unsigned int i = 0;
-    return [str, i](const char &c) mutable {
-      return i == str.length() || str[i++] == c;
-    };
-  };
-  return std::make_unique<
-      PredicateParser<char, std::string, Utils::fromChar, Utils::fold>>(
-      fn, str.length(), name);
-};
+std::unique_ptr<
+    PredicateParser<char, std::string, Utils::fromChar, Utils::fold>>
+StringPredicate(const std::string &str, const std::string &name);
 } // namespace Parser

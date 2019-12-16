@@ -4,6 +4,24 @@
 
 namespace Parser {
 
+/**
+ * Apply the first parser many times until the terminating parser is matched.
+ * Simple concept but there are some requirements on the parsers.
+ * * The terminating parser should be independent of the first parser. It would
+ *   match against every tokens.
+ * * The first parser should not have lookahead, as the remainingTokens from the
+ *   first parser would be discarded finally. I cannot think of alternatives as
+ *   the terminating paresr is independent of the first parser, it does not make
+ *   sense to have lookahead. Maybe the first assumption is wrong, the
+ *   terminating parser cannot be independent of the first parser and this
+ *   should be a recursive branch construct (with optimization).
+ * Regarding the implementation, we match the suffix over all tokens, and store
+ * each state independently (Bruteforce NFA). If the suffix failed to match the
+ * tokens, the tokens will be applied to the parser. We keep track the tokens
+ * using a queue, maintain a maximum number of tokens that is currently hold
+ * by the different states of the suffix parser, and apply the remaining tokens
+ * that are not held by the suffix parser.
+ */
 template <typename S, typename T, typename U>
 class TakeTill : public AbstractParser<S, T> {
 private:
@@ -25,6 +43,7 @@ private:
   }
 
   ParserResult<S, T> consumeTokens(const int keep) {
+    // keep is the maximum suffix length (maybe currently undetermined)
     int count = tokens.size() - keep;
     for (int i = 0; i < count; ++i) {
       auto &t = tokens.front();
@@ -32,6 +51,8 @@ private:
       tokens.pop();
     }
     while (true) {
+      // this part is similar to what happened in the sequence parser,
+      // as the parser is applied repeatedly in a sequential manner.
       S v;
       bool hasValue = true;
       while (true) {
@@ -87,9 +108,12 @@ public:
 
   ParserResult<S, T> operator()(const S &value) override {
     tokens.push(value);
+    // add new state
     suffixStates.push_back(std::make_pair(0, std::move(suffix->clone())));
     int max = 0;
     auto matched = std::unique_ptr<AbstractParserResult<S, U>>(nullptr);
+    // delete states that does not match with the input, and track the length of
+    // the suffix
     for (auto it = suffixStates.begin(); it != suffixStates.end();) {
       if (auto v = (*it->second)(value); v.has_value()) {
         if (!isError(v)) {
@@ -107,9 +131,13 @@ public:
         ++it;
       }
     }
+    // if this returned something, it must be the parser failed to match the
+    // input
     if (auto v = consumeTokens(max); v.has_value())
       return v;
     if (matched != nullptr) {
+      // the suffix matched against the input
+      // we must terminate the parser
       if (!lastFinished) {
         auto opt = (*parser)();
         if (!opt.has_value()) {
@@ -124,6 +152,7 @@ public:
         }
         consumeResult(std::move(asResult(opt)));
       }
+      // discard the output of the suffix parser, as we don't want its output.
       while (matched->get().has_value())
         ;
       auto parsed = castResult<AggregatedParserResult<S, T>, S, T>(
@@ -156,7 +185,8 @@ public:
       }
     }
     if (matched == nullptr)
-      return ParsingError::get<S, T>("Insufficient Tokens: Not Terminated", name);
+      return ParsingError::get<S, T>("Insufficient Tokens: Not Terminated",
+                                     name);
 
     if (auto v = consumeTokens(max); v.has_value())
       return v;
@@ -184,6 +214,13 @@ public:
   }
 
   const std::string &getName() override { return name; }
+
+  static AbstractParserPtr<S, T> get(decltype(parser) parser,
+                                     decltype(suffix) suffix,
+                                     const std::string &name) {
+    return std::make_unique<TakeTill<S, T, U>>(std::move(parser),
+                                               std::move(suffix), name);
+  }
 };
 
 } // namespace Parser
