@@ -5,72 +5,87 @@
 #include <variant>
 #include <vector>
 
+using std::optional;
+using std::unique_ptr;
+using std::string;
+using std::variant;
+using std::vector;
+using std::make_optional;
+
 namespace Parser {
 
+//abstract base classes for parsing result
 template <typename S> class AbstractStream {
 public:
   virtual ~AbstractStream() = default;
-  virtual std::optional<S> get() = 0;
+  virtual optional<S> get() = 0;
 };
 
 template <typename S, typename T>
 class AbstractParserResult : public AbstractStream<T> {
 public:
   virtual ~AbstractParserResult() = default;
-  virtual std::optional<S> getRemaining() = 0;
+  virtual optional<S> getRemaining() = 0;
 };
 
+//class declarations for alias
 class ParsingError;
 template <typename S, typename T> class AbstractParser;
 
+//defining alias
 template <typename S, typename T>
-using AbstractParserResultPtr = std::unique_ptr<AbstractParserResult<S, T>>;
+using AbstractParserResultPtr = unique_ptr<AbstractParserResult<S, T>>;
 
 template <typename S, typename T>
-using AbstractParserPtr = std::unique_ptr<AbstractParser<S, T>>;
+using AbstractParserPtr = unique_ptr<AbstractParser<S, T>>;
 
 template <typename S, typename T>
-using ParserResult = std::optional<
-    std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>>;
+using ParserResult = optional<
+    variant<ParsingError, AbstractParserResultPtr<S,T>>>;
+
+
 
 class ParsingError {
 private:
-  std::string description;
-  std::vector<std::string> stack;
+  string description;
+  vector<string> stack;
 
 public:
   ParsingError() : description("") {}
 
-  ParsingError(const std::string &description, const std::string &name)
+  ParsingError(const string &description, const string &name)
       : description(description) {
     stack.push_back(name);
   }
 
-  void record(const std::string &name) { stack.push_back(name); }
+  void record(const string &name) { stack.push_back(name); }
 
-  std::string toString() const {
-    std::string result = description;
+  //combine all errors into 1 string
+  string toString() const {
+    string result = description;
     for (const auto &msg : stack) {
       result += "\n  at " + msg;
     }
     return result;
   }
 
+  //static accessor functions
   template <typename S, typename T>
-  static ParserResult<S, T> get(const std::string &desc,
-                                const std::string &name) {
-    return std::make_optional(
-        std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
+  static ParserResult<S, T> get(const string &desc,
+                                const string &name) {
+    return make_optional(
+        variant<ParsingError, AbstractParserResultPtr<S,T>>(
             ParsingError(desc, name)));
   }
 
   template <typename S, typename T>
   static ParserResult<S, T> get(ParsingError &e) {
-    return std::make_optional(
-        std::variant<ParsingError, std::unique_ptr<AbstractParserResult<S, T>>>(
+    return make_optional(
+        variant<ParsingError, AbstractParserResultPtr<S,T>>(
             ParsingError(e)));
   }
 };
+
 
 template <typename S, typename T>
 bool isError(const ParserResult<S, T> &result) {
@@ -87,6 +102,7 @@ ParsingError &asError(ParserResult<S, T> &result) {
   return std::get<ParsingError>(result.value());
 }
 
+//abstract base class for different parser combinators
 template <typename S, typename T> class AbstractParser {
 public:
   virtual ~AbstractParser() = default;
@@ -97,7 +113,7 @@ public:
 
   virtual ParserResult<S, T> operator()() = 0;
 
-  virtual const std::string &getName() = 0;
+  virtual const string &getName() = 0;
 
   virtual AbstractParserPtr<S, T> clone() = 0;
 };
@@ -106,8 +122,8 @@ template <typename R, typename S, typename T, typename... _Args>
 inline ParserResult<S, T> castResult(_Args &&... args) {
   AbstractParserResultPtr<S, T> p =
       std::make_unique<R>(std::forward<_Args>(args)...);
-  return std::make_optional(
-      std::variant<ParsingError, decltype(p)>(std::move(p)));
+  return make_optional(
+      variant<ParsingError, decltype(p)>(std::move(p)));
 }
 
 } // namespace Parser
